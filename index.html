@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktiver Deutscher Sprachführer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Slate and Sky -->
+    <!-- Application Structure Plan: The application uses a tab-based navigation system to separate phrase categories, which is more intuitive for quick access than a single long list. This allows the user to focus on one context at a time (e.g., 'Restaurants'). Each phrase is an interactive card that reveals the translation on click, encouraging active learning. A search bar provides global access to all phrases, making it a powerful tool for on-the-go lookups. A new "Practice Mode" offers a focused flashcard experience, allowing users to shuffle cards and mark their knowledge. A new "Add Card" feature allows users to contribute their own phrases to the dataset. This structure was chosen to transform a static document into a dynamic and practical travel utility with a learning and customization component. -->
+    <!-- Visualization & Content Choices: The core information (phrases) is presented as interactive cards. Goal: Inform/Learn. Method: HTML card with a 'reveal' interaction. Interaction: On-click toggle to show translation. Justification: More engaging and memory-friendly than a static table. The search bar serves the goal of organization and quick retrieval. The new practice mode utilizes a single, larger card for focused learning with 'know'/'don't know' progression. The 'Add Card' feature uses a simple form with text inputs for user-generated content. All elements are built with HTML/Tailwind and vanilla JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .phrase-card {
+            transition: all 0.3s ease-in-out;
+            transform-style: preserve-3d;
+        }
+        .phrase-card .back {
+            transform: rotateY(180deg);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .phrase-card.is-flipped {
+            transform: rotateY(180deg);
+        }
+        .nav-item {
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-item.active {
+            border-color: #0284c7; /* sky-600 */
+            color: #0284c7;
+            background-color: #f0f9ff; /* sky-50 */
+        }
+        .nav-item:not(.active):hover {
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        /* Styles for the single flashcard in practice mode */
+        .flashcard-single-card .front,
+        .flashcard-single-card .back {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%; /* Ensure content fills the card */
+            padding: 1.5rem; /* More padding for larger card */
+        }
+        .flashcard-single-card .front p,
+        .flashcard-single-card .back p {
+            font-size: 1.875rem; /* text-3xl */
+            line-height: 2.25rem; /* leading-9 */
+            font-weight: 700; /* font-bold */
+        }
+        .flashcard-single-card .back p:last-child {
+            font-size: 1.25rem; /* text-xl */
+            line-height: 1.75rem; /* leading-7 */
+        }
+
+        /* Ensure smooth animation for the single card */
+        .flashcard-single-card {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900">Interaktiver Sprachführer</h1>
+            <p class="text-slate-600 mt-2">Ihr Begleiter für die Reise nach Deutschland</p>
+        </header>
+
+        <div id="mainModeControls" class="mb-8">
+            <div class="relative mb-4">
+                <input type="text" id="searchInput" placeholder="Suchen Sie nach einer Phrase..." class="w-full p-4 pl-12 border border-slate-300 rounded-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                    <span>🔍</span>
+                </div>
+            </div>
+            <nav id="categoryNav" class="flex flex-wrap justify-center gap-2 md:gap-4 mb-8">
+            </nav>
+            <div class="flex flex-col md:flex-row gap-4 mt-4">
+                <button id="startPracticeModeBtn" class="flex-1 bg-sky-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-sky-700 transition duration-300 ease-in-out font-medium text-lg">
+                    ✨ Übungsmodus starten
+                </button>
+                <button id="showAddCardFormBtn" class="flex-1 bg-indigo-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 ease-in-out font-medium text-lg">
+                    ➕ Neue Phrase hinzufügen
+                </button>
+            </div>
+        </div>
+
+        <div id="addCardFormContainer" class="hidden bg-white p-6 rounded-xl shadow-lg mb-8">
+            <h2 class="text-2xl font-bold text-slate-900 mb-4">Neue Phrase hinzufügen</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="englishInput" class="block text-sm font-medium text-slate-700">Englische Phrase:</label>
+                    <input type="text" id="englishInput" class="mt-1 block w-full p-3 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                </div>
+                <div>
+                    <label for="germanInput" class="block text-sm font-medium text-slate-700">Deutsche Übersetzung:</label>
+                    <input type="text" id="germanInput" class="mt-1 block w-full p-3 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                </div>
+                <div>
+                    <label for="pronunciationInput" class="block text-sm font-medium text-slate-700">Aussprache (phonetisch):</label>
+                    <input type="text" id="pronunciationInput" class="mt-1 block w-full p-3 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500" placeholder="Optional, wird sonst generiert">
+                </div>
+                <div>
+                    <label for="categoryInput" class="block text-sm font-medium text-slate-700">Kategorie:</label>
+                    <input type="text" id="categoryInput" class="mt-1 block w-full p-3 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500" placeholder="z.B. Im Restaurant, Einkaufen">
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button id="cancelAddCardBtn" class="bg-slate-300 text-slate-800 py-2 px-5 rounded-lg shadow-md hover:bg-slate-400 transition duration-300 ease-in-out font-medium">
+                        Abbrechen
+                    </button>
+                    <button id="addPhraseBtn" class="bg-green-600 text-white py-2 px-5 rounded-lg shadow-md hover:bg-green-700 transition duration-300 ease-in-out font-medium">
+                        Phrase hinzufügen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <main id="phraseContainer">
+            <!-- Phrases will be rendered here in normal mode -->
+        </main>
+
+        <div id="flashcardMode" class="hidden flex flex-col items-center justify-center min-h-[400px] bg-slate-100 rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold text-sky-700 mb-6">Übungsmodus</h2>
+            <div id="currentFlashcardContainer" class="perspective-1000 w-full max-w-md h-64 mb-6">
+                <div class="phrase-card flashcard-single-card relative w-full h-full bg-white border border-slate-200 rounded-lg shadow-xl cursor-pointer">
+                    <div class="front absolute w-full h-full bg-white border border-slate-200 rounded-lg flex flex-col justify-center items-center text-center p-4">
+                        <p class="text-3xl font-bold text-slate-800">Lade Phrase...</p>
+                        <span class="text-sm text-slate-400 mt-2">Klicken zum Umdrehen</span>
+                    </div>
+                    <div class="back absolute w-full h-full bg-sky-100 border border-sky-200 rounded-lg flex flex-col justify-center items-center text-center p-4">
+                        <p class="text-3xl font-bold text-sky-800"></p>
+                        <p class="text-xl text-sky-600 italic mt-1"></p>
+                    </div>
+                </div>
+            </div>
+            <p id="flashcardProgress" class="text-slate-600 mb-6 text-lg">0 / 0</p>
+            <div class="flex flex-wrap justify-center gap-4 w-full">
+                <button id="flashcardFlipBtn" class="flex-1 bg-sky-500 text-white py-3 px-6 rounded-lg shadow-md hover:bg-sky-600 transition duration-300 ease-in-out font-medium text-lg">
+                    Umdrehen
+                </button>
+                <button id="flashcardKnowBtn" class="flex-1 bg-green-500 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-600 transition duration-300 ease-in-out font-medium text-lg">
+                    Ich weiß es 👍
+                </button>
+                <button id="flashcardDontKnowBtn" class="flex-1 bg-red-500 text-white py-3 px-6 rounded-lg shadow-md hover:bg-red-600 transition duration-300 ease-in-out font-medium text-lg">
+                    Ich weiß es nicht 👎
+                </button>
+                <button id="flashcardNextBtn" class="flex-1 bg-slate-300 text-slate-800 py-3 px-6 rounded-lg shadow-md hover:bg-slate-400 transition duration-300 ease-in-out font-medium text-lg">
+                    Nächste 👉
+                </button>
+            </div>
+            <button id="exitPracticeModeBtn" class="bg-slate-700 text-white py-2 px-5 rounded-lg shadow-md hover:bg-slate-800 transition duration-300 ease-in-out font-medium mt-6">
+                Übungsmodus beenden
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        let phrases = [
+            { category: "Grüße & Konversation", english: "Hello", german: "Hallo", pronunciation: "HAH-loh" },
+            { category: "Grüße & Konversation", english: "Good morning", german: "Guten Morgen", pronunciation: "GOO-ten MOR-gen" },
+            { category: "Grüße & Konversation", english: "Good day", german: "Guten Tag", pronunciation: "GOO-ten TAHK" },
+            { category: "Grüße & Konversation", english: "Good evening", german: "Guten Abend", pronunciation: "GOO-ten AH-bent" },
+            { category: "Grüße & Konversation", english: "Goodbye (formal)", german: "Auf Wiedersehen", pronunciation: "OWF VEE-der-zane" },
+            { category: "Grüße & Konversation", english: "Goodbye (informal)", german: "Tschüss", pronunciation: "CHUSS" },
+            { category: "Grüße & Konversation", english: "Please", german: "Bitte", pronunciation: "BIT-tuh" },
+            { category: "Grüße & Konversation", english: "Thank you", german: "Danke", pronunciation: "DAHN-kuh" },
+            { category: "Grüße & Konversation", english: "Yes", german: "Ja", pronunciation: "YAH" },
+            { category: "Grüße & Konversation", english: "No", german: "Nein", pronunciation: "NINE" },
+            { category: "Grüße & Konversation", english: "Excuse me", german: "Entschuldigen Sie", pronunciation: "ent-SHOOL-dee-gen ZEE" },
+            { category: "Grüße & Konversation", english: "I don't understand", german: "Ich verstehe nicht", pronunciation: "ikh fair-SHTAY-uh nikht" },
+            { category: "Grüße & Konversation", english: "Do you speak English?", german: "Sprechen Sie Englisch?", pronunciation: "SHPRECH-en ZEE ENG-lish?" },
+            
+            { category: "Im Restaurant", english: "A table for two, please", german: "Einen Tisch für zwei, bitte", pronunciation: "EYE-nen TISH fyur TSVYE, BIT-tuh" },
+            { category: "Im Restaurant", english: "I would like...", german: "Ich hätte gerne...", pronunciation: "ikh HET-tuh GER-nuh..." },
+            { category: "Im Restaurant", english: "The menu, please", german: "Die Speisekarte, bitte", pronunciation: "dee SHPY-zeh-kar-tuh, BIT-tuh" },
+            { category: "Im Restaurant", english: "A beer, please", german: "Ein Bier, bitte", pronunciation: "ine BEER, BIT-tuh" },
+            { category: "Im Restaurant", english: "Water, please", german: "Wasser, bitte", pronunciation: "VAH-sser, BIT-tuh" },
+            { category: "Im Restaurant", english: "The bill, please", german: "Die Rechnung, bitte", pronunciation: "dee REKH-noong, BIT-tuh" },
+            { category: "Im Restaurant", english: "It was delicious", german: "Es war sehr lecker", pronunciation: "es VAH ZAIR LEK-ker" },
+
+            { category: "Beim Döner", english: "A Döner Kebab, please", german: "Einen Döner Kebab, bitte", pronunciation: "EYE-nen DOH-ner KEH-bab, BIT-tuh" },
+            { category: "Beim Döner", english: "With everything?", german: "Mit allem?", pronunciation: "mit AH-lem?" },
+            { category: "Beim Döner", english: "With salad and sauce", german: "Mit Salat und Soße", pronunciation: "mit zah-LAHT oont ZOH-seh" },
+            { category: "Beim Döner", english: "No onions, please", german: "Keine Zwiebeln, bitte", pronunciation: "KY-neh TSVEE-beln, BIT-tuh" },
+            { category: "Beim Döner", english: "Spicy, please", german: "Scharf, bitte", pronunciation: "SHARF, BIT-tuh" },
+            { category: "Beim Döner", english: "To go", german: "Zum Mitnehmen", pronunciation: "tsoom MIT-nay-men" },
+
+            { category: "Einkaufen", english: "How much is this?", german: "Was kostet das?", pronunciation: "vass KOSS-tet das?" },
+            { category: "Einkaufen", english: "I would like to buy...", german: "Ich möchte... kaufen", pronunciation: "ikh MERSH-teh KOW-fen" },
+            { category: "Einkaufen", english: "Can I pay by card?", german: "Kann ich mit Karte zahlen?", pronunciation: "kahn ikh mit KAR-tuh TSAH-len?" },
+            { category: "Einkaufen", english: "Can I pay in cash?", german: "Kann ich bar zahlen?", pronunciation: "kahn ikh BAR TSAH-len?" },
+            { category: "Einkaufen", english: "Do you have a bigger size?", german: "Haben Sie eine größere Größe?", pronunciation: "HAH-ben ZEE EYE-neh GROSS-er-uh GROSS-uh?" }
+        ];
+
+        // New phrases data from the user
+        const newPhrasesData = {
+            "german_phrases_for_visit": {
+                "greetings_and_introductions": [
+                    { "german": "Guten Tag!", "english": "Good day!" },
+                    { "german": "Guten Morgen!", "english": "Good morning!" },
+                    { "german": "Guten Abend!", "english": "Good evening!" },
+                    { "german": "Hallo!", "english": "Hello!" },
+                    { "german": "Schön, Sie kennenzulernen.", "english": "Nice to meet you. (Formal)" },
+                    { "german": "Schön, dich kennenzulernen.", "english": "Nice to meet you. (Informal)" },
+                    { "german": "Vielen Dank für die Einladung.", "english": "Thank you very much for the invitation." },
+                    { "german": "Vielen Dank für Ihre Gastfreundschaft.", "english": "Thank you very much for your hospitality. (Formal)" },
+                    { "german": "Vielen Dank für deine Gastfreundschaft.", "english": "Thank you very much for your hospitality. (Informal)" },
+                    { "german": "Das ist ein kleines Geschenk für Sie.", "english": "This is a small gift for you. (Formal)" },
+                    { "german": "Das ist ein kleines Geschenk für euch.", "english": "This is a small gift for you (plural/informal)." },
+                    { "german": "Soll ich die Schuhe ausziehen?", "english": "Should I take my shoes off?" }
+                ],
+                "dining_and_socializing": [
+                    { "german": "Guten Appetit!", "english": "Enjoy your meal!" },
+                    { "german": "Möchten Sie etwas trinken?", "english": "Would you like something to drink? (Formal)" },
+                    { "german": "Möchtest du etwas trinken?", "english": "Would you like something to drink? (Informal)" },
+                    { "german": "Ja, gerne.", "english": "Yes, gladly. / Yes, please." },
+                    { "german": "Nein, danke.", "english": "No, thank you." },
+                    { "german": "Das schmeckt sehr gut!", "english": "This tastes very good!" },
+                    { "german": "Das Essen ist köstlich.", "english": "The food is delicious." },
+                    { "german": "Kann ich Ihnen helfen?", "english": "Can I help you? (Formal)" },
+                    { "german": "Kann ich dir helfen?", "english": "Can I help you? (Informal)" },
+                    { "german": "Prost!", "english": "Cheers! (When toasting with beer, wine, or spirits)" },
+                    { "german": "Zum Wohl!", "english": "To your health! (More formal toast, can be used for any drink)" },
+                    { "german": "Noch ein bisschen?", "english": "A little more? / Would you like more?" },
+                    { "german": "Ich bin satt, danke.", "english": "I'm full, thank you." },
+                    { "german": "Das war sehr lecker, vielen Dank!", "english": "That was very delicious, thank you very much!" },
+                    { "german": "Darf ich Ihnen beim Abwasch helfen?", "english": "May I help you with the dishes? (Formal)" },
+                    { "german": "Darf ich dir beim Abwasch helfen?", "english": "May I help you with the dishes? (Informal)" }
+                ],
+                "ordering_food_restaurants_doner": [
+                    { "german": "Entschuldigung, die Speisekarte bitte.", "english": "Excuse me, the menu please." },
+                    { "german": "Ich hätte gerne einen Döner.", "english": "I would like a doner (kebab)." },
+                    { "german": "Einen Döner mit alles, bitte.", "english": "A doner with everything, please." },
+                    { "german": "Ohne Zwiebeln, bitte.", "english": "Without onions, please." },
+                    { "german": "Ist das scharf?", "english": "Is that spicy?" },
+                    { "german": "Ich nehme die Nummer drei.", "english": "I'll take number three." },
+                    { "german": "Kann ich bitte bestellen?", "english": "Can I please order?" },
+                    { "german": "Ich hätte gerne...", "english": "I would like to have..." },
+                    { "german": "Was empfehlen Sie?", "english": "What do you recommend? (Formal)" },
+                    { "german": "Was empfiehlst du?", "english": "What do you recommend? (Informal)" },
+                    { "german": "Ein Bier, bitte.", "english": "A beer, please." },
+                    { "german": "Ein Wasser ohne Kohlensäure, bitte.", "english": "A still water, please." },
+                    { "german": "Ein Wasser mit Kohlensäure, bitte.", "english": "A sparkling water, please." },
+                    { "german": "Kann ich bitte die Rechnung haben?", "english": "Can I please have the bill?" },
+                    { "german": "Zahlen, bitte.", "english": "Check, please. (Used to ask for the bill)" },
+                    { "german": "Zusammen oder getrennt?", "english": "Together or separately? (Asking about the bill)" },
+                    { "german": "Das passt so.", "english": "Keep the change. (Lit. 'That fits like this' - used when paying with cash)" }
+                ],
+                "shopping": [
+                    { "german": "Guten Tag!", "english": "Good day! (To shop assistant)" },
+                    { "german": "Ich suche...", "english": "I'm looking for..." },
+                    { "german": "Haben Sie das in einer anderen Größe?", "english": "Do you have this in a different size? (Formal)" },
+                    { "german": "Kann ich das anprobieren?", "english": "Can I try this on?" },
+                    { "german": "Wie viel kostet das?", "english": "How much does that cost?" },
+                    { "german": "Ich nehme das hier.", "english": "I'll take this one." },
+                    { "german": "Zahlen Sie bar oder mit Karte?", "english": "Are you paying cash or by card? (Formal)" },
+                    { "german": "Kann ich mit Karte zahlen?", "english": "Can I pay by card?" },
+                    { "german": "Vielen Dank!", "english": "Thank you very much!" },
+                    { "german": "Auf Wiedersehen!", "english": "Goodbye! (To shop assistant)" }
+                ],
+                "talking_with_her_family": [
+                    { "german": "Wie war Ihr Tag?", "english": "How was your day? (Formal, addressing one person)" },
+                    { "german": "Wie war dein Tag?", "english": "How was your day? (Informal, addressing one person)" },
+                    { "german": "Wie geht es Ihnen heute?", "english": "How are you today? (Formal)" },
+                    { "german": "Was machen Sie beruflich?", "english": "What do you do for a living? (Formal)" },
+                    { "german": "Haben Sie schöne Pläne für das Wochenende?", "english": "Do you have nice plans for the weekend? (Formal)" },
+                    { "german": "Ich komme aus Irland.", "english": "I am from Ireland." },
+                    { "german": "Ich mag Deutschland sehr.", "english": "I like Germany very much." },
+                    { "german": "Hamburg ist wunderschön.", "english": "Hamburg is beautiful." },
+                    { "german": "Das Wetter ist heute schön, nicht wahr?", "english": "The weather is nice today, isn't it?" },
+                    { "german": "Das ist interessant.", "english": "That's interesting." },
+                    { "german": "Ich verstehe.", "english": "I understand." },
+                    { "german": "Können Sie mir mehr darüber erzählen?", "english": "Can you tell me more about it? (Formal)" },
+                    { "german": "Es tut mir leid, ich habe das nicht verstanden.", "english": "I'm sorry, I didn't understand that." },
+                    { "german": "Danke für die Erklärung.", "english": "Thank you for the explanation." },
+                    { "german": "Darf ich Ihnen eine Frage stellen?", "english": "May I ask you a question? (Formal)" },
+                    { "german": "Ihre Tochter ist sehr nett.", "english": "Your daughter is very nice. (Formal)" },
+                    { "german": "Ich freue mich, hier zu sein.", "english": "I'm happy to be here." }
+                ],
+                "general_courtesy_and_questions": [
+                    { "german": "Bitte.", "english": "Please. / You're welcome." },
+                    { "german": "Danke (schön).", "english": "Thank you (very much)." },
+                    { "german": "Entschuldigung!", "english": "Excuse me! / Sorry!" },
+                    { "german": "Verzeihung!", "english": "Pardon me! (More formal 'excuse me')" },
+                    { "german": "Sprechen Sie Englisch?", "english": "Do you speak English? (Formal)" },
+                    { "german": "Sprichst du Englisch?", "english": "Do you speak English? (Informal)" },
+                    { "german": "Ich spreche nur ein bisschen Deutsch.", "english": "I only speak a little German." },
+                    { "german": "Können Sie das bitte wiederholen?", "english": "Can you please repeat that? (Formal)" },
+                    { "german": "Kannst du das bitte wiederholen?", "english": "Can you please repeat that? (Informal)" },
+                    { "german": "Können Sie bitte langsamer sprechen?", "english": "Can you please speak slower? (Formal)" },
+                    { "german": "Kannst du bitte langsamer sprechen?", "english": "Can you please speak slower? (Informal)" },
+                    { "german": "Wo ist die Toilette?", "english": "Where is the toilet?" },
+                    { "german": "Wie geht es Ihnen?", "english": "How are you? (Formal)" },
+                    { "german": "Wie geht es dir?", "english": "How are you? (Informal)" },
+                    { "german": "Mir geht es gut, danke.", "english": "I'm fine, thank you." },
+                    { "german": "Was machen wir heute?", "english": "What are we doing today?" }
+                ],
+                "departure_and_thanks": [
+                    { "german": "Vielen Dank für alles!", "english": "Thank you for everything!" },
+                    { "german": "Es war sehr schön hier.", "english": "It was very nice here." },
+                    { "german": "Wir sehen uns bald wieder!", "english": "We'll see each other again soon!" },
+                    { "german": "Auf Wiedersehen!", "english": "Goodbye! (Formal, used when leaving)" },
+                    { "german": "Tschüss!", "english": "Bye! (Informal)" },
+                    { "german": "Gute Nacht!", "english": "Good night!" },
+                    { "german": "Ich freue mich auf das nächste Mal.", "english": "I'm looking forward to next time." },
+                    { "german": "Vielen Dank nochmals für die schöne Zeit.", "english": "Thanks again for the lovely time." }
+                ],
+                "asking_about_preferences": [
+                    { "german": "Mögen Sie [Irish Whiskey]?", "english": "Do you like [Irish Whiskey]? (Formal)" },
+                    { "german": "Magst du [Irish Whiskey]?", "english": "Do you like [Irish Whiskey]? (Informal)" },
+                    { "german": "Das ist eine Spezialität aus Irland.", "english": "This is a specialty from Ireland." },
+                    { "german": "Ich hoffe, es schmeckt Ihnen/euch.", "english": "I hope you (formal/plural) like it (taste)." }
+                ]
+            }
+        };
+
+        const phraseContainer = document.getElementById('phraseContainer');
+        const categoryNav = document.getElementById('categoryNav');
+        const searchInput = document.getElementById('searchInput');
+        const mainModeControls = document.getElementById('mainModeControls');
+        const startPracticeModeBtn = document.getElementById('startPracticeModeBtn');
+
+        const flashcardMode = document.getElementById('flashcardMode');
+        const currentFlashcardContainer = document.getElementById('currentFlashcardContainer');
+        const flashcardFront = currentFlashcardContainer.querySelector('.front p');
+        const flashcardBackGerman = currentFlashcardContainer.querySelector('.back p:first-child');
+        const flashcardBackPronunciation = currentFlashcardContainer.querySelector('.back p:last-child');
+        const flashcardFlipBtn = document.getElementById('flashcardFlipBtn');
+        const flashcardKnowBtn = document.getElementById('flashcardKnowBtn');
+        const flashcardDontKnowBtn = document.getElementById('flashcardDontKnowBtn');
+        const flashcardNextBtn = document.getElementById('flashcardNextBtn');
+        const exitPracticeModeBtn = document.getElementById('exitPracticeModeBtn');
+        const flashcardProgress = document.getElementById('flashcardProgress');
+
+        const addCardFormContainer = document.getElementById('addCardFormContainer');
+        const showAddCardFormBtn = document.getElementById('showAddCardFormBtn');
+        const englishInput = document.getElementById('englishInput');
+        const germanInput = document.getElementById('germanInput');
+        const pronunciationInput = document.getElementById('pronunciationInput');
+        const categoryInput = document.getElementById('categoryInput');
+        const addPhraseBtn = document.getElementById('addPhraseBtn');
+        const cancelAddCardBtn = document.getElementById('cancelAddCardBtn');
+
+
+        let activeCategory = '';
+        let isFlashcardMode = false;
+        let phrasesToPractice = []; 
+        let currentFlashcardIndex = 0;
+        let sessionUnknownPhrases = []; 
+        let sessionKnownPhrases = []; 
+        let currentSessionNumber = 0; 
+
+        // Map for consistent category names
+        const categoryMap = {
+            "greetings_and_introductions": "Grüße & Konversation",
+            "dining_and_socializing": "Essen & Sozialisieren", // New broader category
+            "ordering_food_restaurants_doner": "Im Restaurant", // Integrate with existing
+            "shopping": "Einkaufen",
+            "talking_with_her_family": "Familien- & Alltagsgespräche", // New
+            "general_courtesy_and_questions": "Allgemeine Höflichkeit & Fragen", // New
+            "departure_and_thanks": "Abschied & Dank", // New
+            "asking_about_preferences": "Präferenzen erfragen" // New
+        };
+
+        function getPronunciation(germanText) {
+            const replacements = {
+                'ä': 'eh', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
+                'ch': 'kh', 'ei': 'eye', 'ie': 'ee', 'eu': 'oy', 'au': 'ow',
+                'sch': 'sh', 'sp': 'shp', 'st': 'sht', 'ig': 'ikh',
+                'e$': 'uh', // 'e' at the end of a word often like 'uh'
+                'er$': 'er', // 'er' at the end often like 'uh'
+                'en$': 'en', // 'en' at the end often like 'n' sound, but 'en' is clearer
+                'gn': 'gn', 'pf': 'pf', 'qu': 'kv', 'z': 'ts', 'v': 'f', 'w': 'v'
+            };
+            let pronunciation = germanText.toLowerCase();
+            for (const [key, value] of Object.entries(replacements)) {
+                if (key.endsWith('$')) {
+                    const regex = new RegExp(key);
+                    pronunciation = pronunciation.replace(regex, value);
+                } else {
+                    pronunciation = pronunciation.split(key).join(value);
+                }
+            }
+            pronunciation = pronunciation.replace(/[^a-z\s-]/g, '').trim();
+            return pronunciation.charAt(0).toUpperCase() + pronunciation.slice(1);
+        }
+
+        function addPhrasesFromNewData() {
+            const existingPhraseKeys = new Set(phrases.map(p => `${p.english.toLowerCase()}|||${p.german.toLowerCase()}`));
+
+            for (const categoryKey in newPhrasesData.german_phrases_for_visit) {
+                const targetCategory = categoryMap[categoryKey] || categoryKey; // Use mapped name or original
+                const newCategoryPhrases = newPhrasesData.german_phrases_for_visit[categoryKey];
+
+                newCategoryPhrases.forEach(newPhrase => {
+                    const phraseKey = `${newPhrase.english.toLowerCase()}|||${newPhrase.german.toLowerCase()}`;
+                    if (!existingPhraseKeys.has(phraseKey)) {
+                        phrases.push({
+                            category: targetCategory,
+                            english: newPhrase.english,
+                            german: newPhrase.german,
+                            pronunciation: newPhrase.pronunciation || getPronunciation(newPhrase.german)
+                        });
+                        existingPhraseKeys.add(phraseKey);
+                    }
+                });
+            }
+        }
+
+        // Call this once to load new data
+        addPhrasesFromNewData();
+
+        let categories = [...new Set(phrases.map(p => p.category))]; // Re-initialize categories after adding new data
+        activeCategory = categories[0];
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function renderCategories() {
+            categoryNav.innerHTML = categories.map(cat => `
+                <button class="nav-item px-4 py-2 border-b-2 font-medium text-slate-600 rounded-t-lg ${cat === activeCategory ? 'active' : 'border-transparent'}" data-category="${cat}">
+                    ${cat}
+                </button>
+            `).join('');
+        }
+
+        function createPhraseCardHTML(phrase) {
+             return `
+                <div class="phrase-card-container perspective-1000 h-28">
+                    <div class="phrase-card relative w-full h-full cursor-pointer">
+                        <div class="front absolute w-full h-full bg-white border border-slate-200 rounded-lg p-4 flex flex-col justify-center items-center text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+                            <p class="text-lg font-medium text-slate-800">${phrase.english}</p>
+                            <span class="text-xs text-slate-400 mt-2">Zum Übersetzen klicken</span>
+                        </div>
+                        <div class="back absolute w-full h-full bg-sky-100 border border-sky-200 rounded-lg p-4 flex flex-col justify-center items-center text-center shadow-lg">
+                            <p class="text-xl font-bold text-sky-800">${phrase.german}</p>
+                            <p class="text-md text-sky-600 italic mt-1">${phrase.pronunciation}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPhrases() {
+            if (isFlashcardMode) {
+                mainModeControls.classList.add('hidden');
+                addCardFormContainer.classList.add('hidden'); 
+                phraseContainer.classList.add('hidden');
+                flashcardMode.classList.remove('hidden');
+                return;
+            } else {
+                mainModeControls.classList.remove('hidden');
+                phraseContainer.classList.remove('hidden');
+                flashcardMode.classList.add('hidden');
+                addCardFormContainer.classList.add('hidden'); 
+            }
+
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredPhrases = phrases.filter(p => {
+                const inCategory = p.category === activeCategory || searchTerm;
+                const matchesSearch = p.english.toLowerCase().includes(searchTerm) || p.german.toLowerCase().includes(searchTerm);
+                return inCategory && matchesSearch;
+            });
+            
+            if (searchTerm) {
+                const grouped = filteredPhrases.reduce((acc, p) => {
+                    if (!acc[p.category]) acc[p.category] = [];
+                    acc[p.category].push(p);
+                    return acc;
+                }, {});
+
+                phraseContainer.innerHTML = Object.keys(grouped).map(cat => `
+                    <div class="mb-6">
+                        <h2 class="text-xl font-bold text-sky-700 border-b-2 border-sky-200 pb-2 mb-4">${cat}</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${grouped[cat].map(createPhraseCardHTML).join('')}
+                        </div>
+                    </div>
+                `).join('');
+
+            } else {
+                 phraseContainer.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${filteredPhrases.map(createPhraseCardHTML).join('')}
+                    </div>
+                `;
+            }
+
+            if (filteredPhrases.length === 0) {
+                phraseContainer.innerHTML = `<p class="text-center text-slate-500 py-8">Keine Phrasen gefunden.</p>`;
+            }
+        }
+        
+        function startPracticeMode() {
+            isFlashcardMode = true;
+            currentSessionNumber = 1; 
+            sessionUnknownPhrases = [];
+            sessionKnownPhrases = [];
+            phrasesToPractice = shuffleArray([...phrases]); 
+            currentFlashcardIndex = 0;
+            
+            flashcardKnowBtn.disabled = false;
+            flashcardDontKnowBtn.disabled = false;
+            flashcardNextBtn.disabled = false;
+            flashcardFlipBtn.disabled = false;
+
+            flashcardMode.querySelector('h2').textContent = 'Übungsmodus - Runde 1';
+            renderFlashcard();
+            renderPhrases(); 
+        }
+
+        function renderFlashcard() {
+            const card = currentFlashcardContainer.querySelector('.phrase-card');
+            
+            if (currentFlashcardIndex < phrasesToPractice.length) {
+                const currentPhrase = phrasesToPractice[currentFlashcardIndex];
+                flashcardFront.textContent = currentPhrase.english;
+                flashcardBackGerman.textContent = currentPhrase.german;
+                flashcardBackPronunciation.textContent = currentPhrase.pronunciation;
+                flashcardProgress.textContent = `Runde ${currentSessionNumber}: ${currentFlashcardIndex + 1} / ${phrasesToPractice.length}`;
+            } else {
+                displayPracticeCompletion("Übung beendet. Klicken Sie auf 'Übungsmodus beenden'.");
+            }
+             card.classList.remove('is-flipped'); 
+        }
+
+        function advanceFlashcard(isKnown) {
+            const card = currentFlashcardContainer.querySelector('.phrase-card');
+            
+            if (currentFlashcardIndex < phrasesToPractice.length) {
+                const currentPhrase = phrasesToPractice[currentFlashcardIndex];
+                if (isKnown) {
+                    sessionKnownPhrases.push(currentPhrase);
+                } else {
+                    sessionUnknownPhrases.push(currentPhrase);
+                }
+            }
+
+            if (card.classList.contains('is-flipped')) {
+                card.classList.remove('is-flipped'); 
+                setTimeout(() => { 
+                    currentFlashcardIndex++;
+                    handleSessionEnd(); 
+                }, 300); 
+            } else {
+                currentFlashcardIndex++;
+                handleSessionEnd(); 
+            }
+        }
+
+        function handleSessionEnd() {
+            if (currentFlashcardIndex >= phrasesToPractice.length) { 
+                if (currentSessionNumber === 1) {
+                    let nextRoundPhrases = [...sessionUnknownPhrases];
+
+                    const knownSubsetSize = Math.ceil(sessionKnownPhrases.length * 0.2); 
+                    const knownSubset = shuffleArray([...sessionKnownPhrases]).slice(0, knownSubsetSize);
+                    
+                    nextRoundPhrases.push(...knownSubset);
+                    
+                    if (nextRoundPhrases.length === 0) {
+                        displayPracticeCompletion("Alle Phrasen gemeistert! Großartige Arbeit!");
+                        return;
+                    }
+
+                    phrasesToPractice = shuffleArray(nextRoundPhrases);
+                    sessionUnknownPhrases = []; 
+                    sessionKnownPhrases = []; 
+                    currentFlashcardIndex = 0;
+                    currentSessionNumber = 2; 
+                    flashcardMode.querySelector('h2').textContent = 'Übungsmodus - Runde 2 (Wiederholung)';
+                    renderFlashcard(); 
+
+                } else { 
+                    displayPracticeCompletion("Übungsmodus beendet! Gut gemacht!");
+                }
+            } else {
+                renderFlashcard(); 
+            }
+        }
+
+        function displayPracticeCompletion(message) {
+            flashcardFront.textContent = message;
+            flashcardBackGerman.textContent = "";
+            flashcardBackPronunciation.textContent = "";
+            flashcardProgress.textContent = "Fertig";
+            flashcardKnowBtn.disabled = true;
+            flashcardDontKnowBtn.disabled = true;
+            flashcardNextBtn.disabled = true;
+            flashcardFlipBtn.disabled = true;
+            currentFlashcardContainer.querySelector('.phrase-card').classList.remove('is-flipped'); 
+        }
+
+        function showAddCardForm() {
+            addCardFormContainer.classList.remove('hidden');
+            phraseContainer.classList.add('hidden');
+            mainModeControls.classList.add('hidden'); 
+            flashcardMode.classList.add('hidden');
+        }
+
+        function hideAddCardForm() {
+            addCardFormContainer.classList.add('hidden');
+            mainModeControls.classList.remove('hidden'); 
+            renderPhrases(); 
+            englishInput.value = '';
+            germanInput.value = '';
+            pronunciationInput.value = '';
+            categoryInput.value = '';
+        }
+
+        function handleAddPhrase() {
+            const newEnglish = englishInput.value.trim();
+            const newGerman = germanInput.value.trim();
+            const newPronunciation = pronunciationInput.value.trim();
+            const newCategory = categoryInput.value.trim();
+
+            if (!newEnglish || !newGerman || !newCategory) {
+                // In a real app, you'd show a modal or a div with an error message
+                console.error("English phrase, German translation, and Category must be filled out.");
+                return;
+            }
+
+            const phraseKey = `${newEnglish.toLowerCase()}|||${newGerman.toLowerCase()}`;
+            const existingPhraseKeys = new Set(phrases.map(p => `${p.english.toLowerCase()}|||${p.german.toLowerCase()}`));
+
+            if (existingPhraseKeys.has(phraseKey)) {
+                console.error("This phrase already exists in the dictionary.");
+                // You might want to show a user-facing message here
+                return;
+            }
+
+            const newPhrase = {
+                english: newEnglish,
+                german: newGerman,
+                pronunciation: newPronunciation || getPronunciation(newGerman),
+                category: newCategory
+            };
+
+            phrases.push(newPhrase);
+            
+            if (!categories.includes(newCategory)) {
+                categories.push(newCategory);
+                categories.sort(); // Keep categories sorted
+                renderCategories(); 
+            }
+            
+            hideAddCardForm(); 
+        }
+
+
+        categoryNav.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                activeCategory = e.target.dataset.category;
+                searchInput.value = '';
+                renderCategories();
+                renderPhrases();
+            }
+        });
+        
+        phraseContainer.addEventListener('click', (e) => {
+            const card = e.target.closest('.phrase-card');
+            if (card) {
+                card.classList.toggle('is-flipped');
+            }
+        });
+
+        searchInput.addEventListener('input', () => {
+             const navItems = document.querySelectorAll('.nav-item');
+             if(searchInput.value) {
+                navItems.forEach(item => item.classList.remove('active'));
+             } else {
+                renderCategories();
+             }
+             renderPhrases();
+        });
+
+        startPracticeModeBtn.addEventListener('click', startPracticeMode);
+        showAddCardFormBtn.addEventListener('click', showAddCardForm);
+        cancelAddCardBtn.addEventListener('click', hideAddCardForm);
+        addPhraseBtn.addEventListener('click', handleAddPhrase);
+
+
+        flashcardFlipBtn.addEventListener('click', () => {
+            currentFlashcardContainer.querySelector('.phrase-card').classList.toggle('is-flipped');
+        });
+
+        flashcardKnowBtn.addEventListener('click', () => advanceFlashcard(true));
+        flashcardDontKnowBtn.addEventListener('click', () => advanceFlashcard(false));
+        flashcardNextBtn.addEventListener('click', () => advanceFlashcard(false)); 
+
+        exitPracticeModeBtn.addEventListener('click', () => {
+            isFlashcardMode = false;
+            currentSessionNumber = 0; 
+            flashcardKnowBtn.disabled = false;
+            flashcardDontKnowBtn.disabled = false;
+            flashcardNextBtn.disabled = false;
+            flashcardFlipBtn.disabled = false;
+            renderPhrases();
+        });
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderCategories();
+            renderPhrases();
+        });
+    </script>
+</body>
+</html>
